@@ -1,9 +1,9 @@
 // Copyright SnagSovereign 2021
 
+#include "Grabber.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
-#include "Grabber.h"
 
 #define OUT
 
@@ -15,7 +15,6 @@ UGrabber::UGrabber()
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
-
 // Called when the game starts
 void UGrabber::BeginPlay()
 {
@@ -25,9 +24,22 @@ void UGrabber::BeginPlay()
 	SetupInputComponent();
 }
 
+// Called every frame
+void UGrabber::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) 
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	// if something is grabbed
+	if (PhysicsHandle->GrabbedComponent)
+	{
+		// move the object we are holding
+		PhysicsHandle->SetTargetLocation(GetPlayersReach());
+	}
+}
+
 void UGrabber::FindPhysicsHandle()
 {
-	// Find and set the PhysicsHandle
+	// Find and store the PhysicsHandleComponent attached to this Actor
 	PhysicsHandle = GetOwner()->FindComponentByClass<UPhysicsHandleComponent>();
 	
 	// If no PhysicsHandle is found, log an error!
@@ -39,32 +51,19 @@ void UGrabber::FindPhysicsHandle()
 
 void UGrabber::SetupInputComponent()
 {
-	// Find and set the InputComponent
+	// Find and store the InputComponent attached to this Actor
 	InputComponent = GetOwner()->FindComponentByClass<UInputComponent>();
-	// Bind "Grab" input to Grab() and Release()
+
+	// When the "Grab" key is pressed, call Grab()
 	InputComponent->BindAction("Grab", IE_Pressed, this, &UGrabber::Grab);
+
+	// When the "Grab" key is released, call Release()
 	InputComponent->BindAction("Grab", IE_Released, this, &UGrabber::Release);
 }
 
 void UGrabber::Grab()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Grabber pressed"));
-
-	// try and reach any actors with physics body collision channel set
 	FHitResult HitResult = GetFirstPhysicsBodyInReach();
-
-	// Get players viewpoint
-	FVector PlayerViewPointLocation;
-	FRotator PlayerViewPointRotation;
-
-	GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint
-	(
-		OUT PlayerViewPointLocation,
-		OUT PlayerViewPointRotation
-	);
-
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
-
 	UPrimitiveComponent* ComponentToGrab = HitResult.GetComponent();
 
 	// If we hit something then attach the physics handle
@@ -74,75 +73,46 @@ void UGrabber::Grab()
 		(
 			ComponentToGrab,
 			NAME_None,
-			LineTraceEnd
+			GetPlayersReach()
 		);
 	}
 }
 
 void UGrabber::Release()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Grabber released"));
-
 	PhysicsHandle->ReleaseComponent();
-}
-
-// Called every frame
-void UGrabber::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// Get players viewpoint
-	FVector PlayerViewPointLocation;
-	FRotator PlayerViewPointRotation;
-
-	GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint
-	(
-		OUT PlayerViewPointLocation,
-		OUT PlayerViewPointRotation
-	);
-
-	// Calculate the end of the line
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
-
-	if (PhysicsHandle->GrabbedComponent)
-	{
-		PhysicsHandle->SetTargetLocation(LineTraceEnd);
-	}
 }
 
 FHitResult UGrabber::GetFirstPhysicsBodyInReach() const
 {
-	// Get players viewpoint
+	FHitResult Hit;
+	FCollisionQueryParams TraceParams(FName(TEXT("")), false, GetOwner());
+	
+	//Ray-cast out to a certain distance (Reach)
+	GetWorld()->LineTraceSingleByObjectType
+	(
+		OUT Hit,
+		GetOwner()->GetActorLocation(),
+		GetPlayersReach(),
+		FCollisionObjectQueryParams(ECollisionChannel::ECC_PhysicsBody),
+		TraceParams
+	);
+
+	return Hit;
+}
+
+FVector UGrabber::GetPlayersReach() const
+{
 	FVector PlayerViewPointLocation;
 	FRotator PlayerViewPointRotation;
 
+	// Get and store players viewpoint
 	GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint
 	(
 		OUT PlayerViewPointLocation,
 		OUT PlayerViewPointRotation
 	);
 
-	// Calculate the end of the line
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
-
-	FHitResult Hit;
-	FCollisionQueryParams TraceParams(FName(TEXT("")), false, GetOwner());
-	//Ray-cast out to a certain distance (Reach)
-	GetWorld()->LineTraceSingleByObjectType
-	(
-		OUT Hit,
-		PlayerViewPointLocation,
-		LineTraceEnd,
-		FCollisionObjectQueryParams(ECollisionChannel::ECC_PhysicsBody),
-		TraceParams
-	);
-
-	AActor* ActorHit = Hit.GetActor();
-
-	if (ActorHit)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Line trace has hit %s"), *ActorHit->GetName());
-	}
-
-	return Hit;
+	// Returns an FVector that contains the players reach
+	return PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
 }

@@ -7,6 +7,8 @@
 #include "Engine/TriggerVolume.h"
 #include "OpenDoor.generated.h"
 
+#define OUT
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class BUILDING_ESCAPE_API UOpenDoor : public UActorComponent
 {
@@ -25,6 +27,7 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	void OpenDoor(float DeltaTime);
 	void CloseDoor(float DeltaTime);
+	float TotalMassOfActors() const;
 
 private:
 	float InitialYaw, CurrentYaw;
@@ -42,6 +45,9 @@ private:
 
 	UPROPERTY(EditAnywhere)
 	float CloseSpeed = 2.f;
+
+	UPROPERTY(EditAnywhere)
+	float MassToOpenDoor = 60.f;
 
 	UPROPERTY(EditAnywhere)
 	ATriggerVolume* PressurePlate;
